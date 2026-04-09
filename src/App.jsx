@@ -315,6 +315,17 @@ const QUERY_PRESETS = {
     "Europe":         ["business analyst internship Europe", "product analyst intern", "operations intern Germany France", "data analyst intern Europe"],
     "remote":         ["business analyst internship remote", "product analyst intern remote", "operations analyst remote intern"],
   },
+  "Startup": {
+    "India":          ["startup internship business operations strategy", "early stage startup intern India", "founder associate intern India", "startup business development intern", "venture capital internship India startup ecosystem"],
+    "United States":  ["startup internship business operations strategy", "early stage startup intern founder associate", "startup consulting intern growth strategy", "business development intern seed series A startup", "venture capital internship startup ecosystem"],
+    "United Kingdom": ["startup internship London operations strategy", "early stage startup intern UK", "founder associate intern London", "venture capital internship London startup"],
+    "Europe":         ["startup internship Europe operations strategy", "early stage startup intern Berlin", "startup business development intern Europe", "venture capital internship Europe"],
+    "remote":         ["startup internship remote operations", "early stage startup intern remote", "founder associate remote intern", "startup growth strategy intern remote"],
+  },
+};
+
+const PRESET_COLORS = {
+  "Startup": { bg: "#F0FDF4", text: "#166534", accent: "#22C55E" },
 };
 
 function JobBoardTab({ resumes, onAddToTracker }) {
@@ -455,14 +466,12 @@ function JobBoardTab({ resumes, onAddToTracker }) {
         {/* Optimal query presets dropdown */}
         {(() => {
           const regionKey = location || "United States";
-          const allPresets = PRIORITY_ORDER.flatMap((role) =>
-            (QUERY_PRESETS[role]?.[regionKey] || QUERY_PRESETS[role]?.["United States"] || []).map((q) => ({
-              label: q,
-              role,
-              color: RESUME_COLORS[role].accent,
-              bg: RESUME_COLORS[role].bg,
-              text: RESUME_COLORS[role].text,
-            }))
+          const presetRoles = [...PRIORITY_ORDER, "Startup"];
+          const allPresets = presetRoles.flatMap((role) =>
+            (QUERY_PRESETS[role]?.[regionKey] || QUERY_PRESETS[role]?.["United States"] || []).map((q) => {
+              const colors = RESUME_COLORS[role] || PRESET_COLORS[role] || { bg: "#F0FDF4", text: "#166534", accent: "#22C55E" };
+              return { label: q, role, color: colors.accent, bg: colors.bg, text: colors.text };
+            })
           );
           if (!allPresets.length) return null;
           return (
