@@ -1,4 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  fetchApplications, insertApplication, updateApplication, deleteApplication,
+  fetchResumes, upsertResume,
+} from "./supabase.js";
 
 const PRIORITY_ORDER = ["Consulting", "Finance", "Business Analyst"];
 
@@ -669,28 +673,34 @@ export default function InternshipDashboard() {
 }
 
 function Dashboard({ userName, onLogout }) {
+  const userId = localStorage.getItem("ip_pin_hash") || "default";
   const [tab, setTab] = useState("board");
-  const [resumes, setResumes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("ip_resumes") || "{}"); } catch { return {}; }
-  });
+  const [resumes, setResumes] = useState({});
   const [jobText, setJobText] = useState("");
   const [matchResult, setMatchResult] = useState(null);
-  const [applications, setApplications] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("ip_applications") || "[]"); } catch { return []; }
-  });
+  const [applications, setApplications] = useState([]);
   const [coverLetter, setCoverLetter] = useState("");
   const [coverLoading, setCoverLoading] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [dataLoading, setDataLoading] = useState(true);
   const fileRef = useRef();
 
-  // Persist to localStorage whenever data changes
+  // Load from Supabase on mount
   useEffect(() => {
-    localStorage.setItem("ip_applications", JSON.stringify(applications));
-  }, [applications]);
-
-  useEffect(() => {
-    localStorage.setItem("ip_resumes", JSON.stringify(resumes));
-  }, [resumes]);
+    (async () => {
+      try {
+        const [apps, res] = await Promise.all([
+          fetchApplications(userId),
+          fetchResumes(userId),
+        ]);
+        setApplications(apps);
+        setResumes(res);
+      } catch (err) {
+        console.error("Failed to load data from Supabase:", err);
+      }
+      setDataLoading(false);
+    })();
+  }, [userId]);
 
   const [resumeUploading, setResumeUploading] = useState(false);
   const [resumeError, setResumeError] = useState("");
@@ -702,7 +712,7 @@ function Dashboard({ userName, onLogout }) {
     setResumeError("");
     setResumeUploading(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target.result;
       let detected = "Consulting";
       let best = 0;
@@ -710,7 +720,9 @@ function Dashboard({ userName, onLogout }) {
         const s = scoreMatch(text, type);
         if (s > best) { best = s; detected = type; }
       }
-      setResumes((prev) => ({ ...prev, [detected]: { name: file.name, preview: text.substring(0, 300), text, detectedType: detected } }));
+      const preview = text.substring(0, 300);
+      setResumes((prev) => ({ ...prev, [detected]: { name: file.name, preview, text, detectedType: detected } }));
+      try { await upsertResume(userId, detected, file.name, text, preview); } catch (err) { console.error(err); }
       setResumeUploading(false);
     };
     reader.onerror = () => { setResumeError("Failed to read file."); setResumeUploading(false); };
@@ -723,7 +735,7 @@ function Dashboard({ userName, onLogout }) {
   };
 
   const saveApplication = useCallback((title, company, resumeType, text = jobText) => {
-    setApplications((prev) => [{
+    const app = {
       id: generateId(),
       title: title || "Untitled Role",
       company: company || "Unknown",
@@ -731,9 +743,11 @@ function Dashboard({ userName, onLogout }) {
       status: "To Apply",
       date: new Date().toLocaleDateString(),
       jobText: text,
-    }, ...prev]);
+    };
+    setApplications((prev) => [app, ...prev]);
+    insertApplication(userId, app).catch(console.error);
     setTab("tracker");
-  }, [jobText]);
+  }, [jobText, userId]);
 
   const generateCover = async (app) => {
     setCoverLoading(true);
@@ -957,8 +971,10 @@ function Dashboard({ userName, onLogout }) {
                 {applications.map((app) => {
                   const sc = STATUS_COLORS[app.status];
                   const rc = RESUME_COLORS[app.resumeType];
-                  const updateApp = (fields) =>
+                  const updateApp = (fields) => {
                     setApplications((prev) => prev.map((a) => a.id === app.id ? { ...a, ...fields } : a));
+                    updateApplication(app.id, fields).catch(console.error);
+                  };
                   return (
                     <GlassCard key={app.id} style={{ padding: "16px 20px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -1024,7 +1040,7 @@ function Dashboard({ userName, onLogout }) {
                           background: "#fff", color: "#6366F1", fontWeight: 600,
                           fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                         }}>✉️ Cover Letter</button>
-                        <button onClick={() => setApplications((prev) => prev.filter((a) => a.id !== app.id))}
+                        <button onClick={() => { setApplications((prev) => prev.filter((a) => a.id !== app.id)); deleteApplication(app.id).catch(console.error); }}
                           style={{
                             padding: "6px 10px", borderRadius: 8, border: "none",
                             background: "transparent", color: "#CBD5E1", fontSize: 16, cursor: "pointer",
