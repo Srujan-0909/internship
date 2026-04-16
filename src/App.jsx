@@ -847,9 +847,10 @@ function Dashboard({ userName, onLogout }) {
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 20px 60px" }}>
 
         {/* ═══ JOB BOARD ═══ */}
-        {tab === "board" && (
+        {/* Always mounted so search inputs & results survive tab switches */}
+        <div style={{ display: tab === "board" ? "block" : "none" }}>
           <JobBoardTab resumes={resumes} onAddToTracker={saveApplication} />
-        )}
+        </div>
 
         {/* ═══ JOB MATCHER ═══ */}
         {tab === "match" && (
